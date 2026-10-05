@@ -1,0 +1,6 @@
+{
+  "appId": "br.ms.campogrande.geres.mobile",
+  "appName": "GERES",
+  "webDir": "www",
+  "server": { "url": "https://gedremsisep-lgtm.github.io/geres-apk/", "cleartext": false, "androidScheme": "https" }
+}
