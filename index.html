@@ -1140,7 +1140,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 /* ════════════════ VERSÃO / AUTO-ATUALIZAÇÃO ════════════════ */
-const APP_VERSION='20261005-01';
+const APP_VERSION='20261005-02';
 async function checkAppUpdate(){
   if(true){ var vl0=document.getElementById('app-ver-lbl'); if(vl0) vl0.textContent=APP_VERSION; return; } // canal Supabase aposentado: usa o canal GitHub Pages (bloco ATUALIZAÇÃO AUTOMÁTICA DA TELA)
   const vl=document.getElementById('app-ver-lbl'); if(vl) vl.textContent=APP_VERSION;
@@ -2136,36 +2136,40 @@ try{setTimeout(function(){try{reenviarOutbox();}catch(e){}},5000);setInterval(fu
 const CANAL_APK = 'https://gedremsisep-lgtm.github.io/geres-apk/';
 (function(){
   const vn=v=>{const m=String(v||'').match(/(\d{6,8})\D+(\d+)/);return m?(parseInt(m[1],10)*100000+parseInt(m[2],10)):0;};
-  let ultimaAcao=Date.now(), nova=null, timer=null;
+  let ultimaAcao=Date.now(), nova=null, cont=null, adiadoAte=0;
   ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{ultimaAcao=Date.now();},true));
   function ocupado(){
     const lg=document.getElementById('scr-login');
     if(lg && getComputedStyle(lg).display!=='none') return false;
     const ae=document.activeElement;
     if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return true;
-    return (Date.now()-ultimaAcao) < 20000;
+    return (Date.now()-ultimaAcao) < 8000;
   }
-  function aviso(txt,btn){
+  function aviso(txt,adiar){
     let f=document.getElementById('atu-aviso');
     if(!f){ f=document.createElement('div'); f.id='atu-aviso';
       f.style.cssText='position:fixed;left:12px;right:12px;bottom:14px;z-index:99998;background:#0b1f3a;color:#fff;padding:11px 14px;border-radius:14px;font:600 13px sans-serif;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 4px 16px rgba(0,0,0,.45)';
       document.body.appendChild(f); }
-    f.innerHTML='<span>'+txt+'</span>'+(btn?'<button style="background:#16a34a;color:#fff;border:0;border-radius:12px;padding:7px 14px;font-weight:800" onclick="window.__geresAplicarTela()">Atualizar</button>':'');
+    f.innerHTML='<span>'+txt+'</span>'+(adiar?'<button style="background:#475569;color:#fff;border:0;border-radius:12px;padding:7px 14px;font-weight:800" onclick="window.__geresAdiarTela()">Adiar 10 min</button>':'');
   }
+  function limpaAviso(){ const f=document.getElementById('atu-aviso'); if(f) f.remove(); }
   async function aplicar(){
+    if(cont){ clearInterval(cont); cont=null; }
     const t=parseInt(sessionStorage.getItem('geresapp_atu_tentativa')||'0',10);
-    if(t && Date.now()-t<15*60000) return;
+    if(t && Date.now()-t<5*60000) return;
     sessionStorage.setItem('geresapp_atu_tentativa',String(Date.now()));
     aviso('Atualizando para '+nova+'…',false);
     try{ await fetch(CANAL_APK+'index.html',{cache:'reload'}); }catch(e){}
     try{ if(window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
     setTimeout(()=>location.reload(),1200);
   }
-  window.__geresAplicarTela=function(){ sessionStorage.removeItem('geresapp_atu_tentativa'); aplicar(); };
+  window.__geresAdiarTela=function(){ if(cont){clearInterval(cont);cont=null;} adiadoAte=Date.now()+10*60000; limpaAviso(); };
   function tentar(){
-    if(!nova) return;
-    if(!ocupado()){ clearInterval(timer); timer=null; aplicar(); }
-    else { aviso('Nova versão '+nova+' disponível',true); if(!timer) timer=setInterval(tentar,20000); }
+    if(!nova || cont || Date.now()<adiadoAte) return;
+    if(!ocupado()){ aplicar(); return; }
+    let seg=20;
+    aviso('Nova versão '+nova+' — atualizando em '+seg+' s',true);
+    cont=setInterval(()=>{ seg--; if(seg<=0){ aplicar(); } else aviso('Nova versão '+nova+' — atualizando em '+seg+' s',true); },1000);
   }
   async function verificar(){
     if(!navigator.onLine) return;
@@ -2176,8 +2180,9 @@ const CANAL_APK = 'https://gedremsisep-lgtm.github.io/geres-apk/';
       if(j && j.versao && vn(j.versao)>vn(APP_VERSION)){ nova=j.versao; tentar(); }
     }catch(e){}
   }
-  setTimeout(verificar,5000);
-  setInterval(verificar,15*60000);
+  setTimeout(verificar,4000);
+  setInterval(verificar,3*60000);
+  setInterval(tentar,30000);
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) verificar(); });
   window.addEventListener('online',verificar);
 })();
