@@ -1,0 +1,67 @@
+name: Gerar APK Android
+on:
+  push:
+    branches: [main]
+    paths: ['geres-mobile/**']
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: geres-apk-publicar
+  cancel-in-progress: false
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Dependências
+        working-directory: geres-mobile
+        run: |
+          npm ci || npm install
+          npm install --no-save typescript
+      - name: Plataforma Android
+        working-directory: geres-mobile
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Permissões (GPS e câmera) e versão
+        working-directory: geres-mobile/android
+        run: |
+          M=app/src/main/AndroidManifest.xml
+          for P in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION CAMERA INTERNET; do
+            grep -q "android.permission.$P" $M || sed -i "s#<application#<uses-permission android:name=\"android.permission.$P\" />\n    <application#" $M
+          done
+          VC=$(date -u +%y%j%H%M)
+          sed -i "s/versionCode [0-9]*/versionCode $VC/" app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$(date -u +%Y%m%d).$VC\"/" app/build.gradle
+          echo "VC=$VC" >> $GITHUB_ENV
+      - name: Compilar
+        working-directory: geres-mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Copiar para a raiz e gravar versão do apk
+        run: |
+          cp geres-mobile/android/app/build/outputs/apk/debug/app-debug.apk ./GERES-Campo.apk
+          node -e "
+          const fs=require('fs');
+          let d={}; try{d=JSON.parse(fs.readFileSync('versao.json','utf8'))}catch(e){}
+          d.apkVersionCode=Number(process.env.VC);
+          d.apkUrl='https://gedremsisep-lgtm.github.io/geres-apk/GERES-Campo.apk';
+          fs.writeFileSync('versao.json',JSON.stringify(d));
+          "
+      - name: Commit
+        run: |
+          git config user.name 'Publicador GERES'
+          git config user.email 'publicador-geres@users.noreply.github.com'
+          git add GERES-Campo.apk versao.json
+          git commit -m 'Publicador GERES: GERES-Campo.apk' || exit 0
+          git pull --rebase
+          git push
